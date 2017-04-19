@@ -1,16 +1,19 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(mocap_optitrack)
 
-find_package(catkin REQUIRED COMPONENTS roscpp std_msgs geometry_msgs tf roslaunch message_generation)
+find_package(catkin REQUIRED COMPONENTS roscpp std_msgs geometry_msgs tf tf_conversions roslaunch message_generation cmake_modules)
+find_package(Eigen REQUIRED)
 
 catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS roscpp message_runtime
+  DEPENDS Eigen
 )
 
 include_directories(include
   ${catkin_INCLUDE_DIRS}
-)
+  ${Eigen_INCLUDE_DIRS}  
+  )
 
 add_subdirectory(src)
 
