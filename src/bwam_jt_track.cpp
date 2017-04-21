@@ -8,6 +8,7 @@
 #include <Eigen/Dense>
 #include <math.h>
 #include <cmath>
+#include <fstream>
 
 using namespace std;
 
@@ -21,6 +22,10 @@ const vector<int> eaIds={2,0,1,1};
 const vector<string> rgIds={"Base/base_link",
                            "Link_1/base_link",
                            "Link_2/base_link"};
+// file_path
+const string path = "./joint_dat.txt";
+
+#define DEBUG
 
 class jointDataHandler { 
 
@@ -32,7 +37,8 @@ class jointDataHandler {
               _tfIds(tfIds),
               _eaIds(eaIds),
               _rgIds(rgIds),
-              _numTF(rgIds.size()-1)
+              _numTF(rgIds.size()-1),
+              _path(path)
             {
                 tfVec_0.resize(_numTF);
                 tfVec.resize(_numTF);
@@ -40,10 +46,14 @@ class jointDataHandler {
                 // Save home position
                 ros::Duration(1.0).sleep();
                 getJointTfs (&tfVec_0);
-                
+           
+                // Open dat file
+                jp_file.open(_path,ios::out);
             }
 
-        ~jointDataHandler(){};
+        ~jointDataHandler(){
+            jp_file.close();
+            };
 
     private:
 
@@ -51,15 +61,14 @@ class jointDataHandler {
         const int _numTF;
         const vector<int> _tfIds, _eaIds;
         const vector<string> _rgIds;
+        const string _path;
 
     public:
 
         tf::TransformListener listener;
         vector <tf::StampedTransform> tfVec_0, tfVec;
-        const string base_name ;
-        const string l1_name ;
-        const string l2_name ;
         ros::NodeHandle node;
+        ofstream jp_file; 
 
 //////////////////////////
     void getJointTf ( tf::StampedTransform * transform, string child, string parent ) {
@@ -139,7 +148,9 @@ class jointDataHandler {
     //    Eigen::Vector3d ea = rot_rel.eulerAngles(0,1,2);
     //    return ea[id] ; 
    // }
+
 //////////////////////////
+
     void printTfs (tf::StampedTransform transform) {
         double yaw, pitch, roll;
         transform.getBasis().getRPY(roll, pitch, yaw);
@@ -150,18 +161,45 @@ class jointDataHandler {
         //Eigen::Vector3d ea = rot.eulerAngles(0,1,2);
         //cout << ea[0] << " " << ea[1] << " " << ea[2] << endl;
     }
+
 //////////////////////////
+
+    void writeJp2File ( const double time, const vector <float> * jp_vec ) {
+        
+        string jp_out;
+        char buffer [50];
+        sprintf(buffer, "%20.12f", time);
+        jp_out = buffer;
+
+        for (int j=0; j < _DOF; j++) {
+        char buffer2 [50];
+            sprintf(buffer2, "%8.6f", (*jp_vec)[j]);
+            jp_out = jp_out + ", " + buffer2;
+        }
+        jp_file << jp_out << endl;
+    }
+
+//////////////////////////
+
     void loop(){
-        ros::Rate rate(1000.0); // 1kHz
+        //ros::Rate rate(1000); // 1kHz
 
         vector <float> jpVec_0 (_DOF, 0.0);
         vector <float> jpVec (_DOF);
 
+        ros::Rate rate(500); 
+        double t_0 = 0.0;
         while (node.ok()) {
         /* Update TF measurement */
             getJointTfs( &tfVec );
             getJointAngles( &tfVec_0, &tfVec, &jpVec );
+            double t = (double) tfVec[0].stamp_.toSec();
+            if (t > t_0) {
+                writeJp2File ( t, &jpVec) ;
+                t_0 = t;
+            }
             
+            #ifdef DEBUG
             float delta = 0.0;
             for (int i=0; i<_DOF; i++) {
                 float delta_i = jpVec[i] - jpVec_0[i];
@@ -172,9 +210,12 @@ class jointDataHandler {
                 cout << (jpVec[0]) * 180.0/3.1415 << " "   
                      << (jpVec[1]) * 180.0/3.1415 << " "   
                      << (jpVec[2]) * 180.0/3.1415 << " "   
-                     << (jpVec[3]) * 180.0/3.1415 << " " << endl; 
+                     << (jpVec[3]) * 180.0/3.1415 << endl;
             }
-        }
+            #endif
+            
+            rate.sleep();
+        } 
 
 
 //        getJointTf( tf_jt1, l1_name, base_name );
