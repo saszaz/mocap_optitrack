@@ -21,5 +21,17 @@ rigid_bodies:
         child_frame_id: Link_2/base_link
         parent_frame_id: world
         use_new_coordinates: false
+    '4':
+        pose: Link_3/pose
+        pose2d: Link_3/ground_pose
+        child_frame_id: Link_3/base_link
+        parent_frame_id: world
+        use_new_coordinates: false
+    '5':
+        pose: Link_4/pose
+        pose2d: Link_4/ground_pose
+        child_frame_id: Link_4/base_link
+        parent_frame_id: world
+        use_new_coordinates: false
 optitrack_config:
         multicast_address: 224.0.0.1

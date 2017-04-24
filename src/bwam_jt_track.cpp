@@ -15,13 +15,15 @@ using namespace std;
 const int DOF=4;
 /* Ids to use for Joint angle determination */
 // TF 
-const vector<int> tfIds={0,0,0,1};
+const vector<int> tfIds={0,1,2,3,4};
 // Euler angle
-const vector<int> eaIds={2,0,1,1};
+const vector<int> eaIds={1,1,1,1,1};
 // Rigid bodies 
 const vector<string> rgIds={"Base/base_link",
                            "Link_1/base_link",
-                           "Link_2/base_link"};
+                           "Link_2/base_link",
+                           "Link_3/base_link",
+                           "Link_4/base_link"};
 // file_path
 const string path = "./joint_dat.txt";
 
@@ -69,6 +71,7 @@ class jointDataHandler {
         vector <tf::StampedTransform> tfVec_0, tfVec;
         ros::NodeHandle node;
         ofstream jp_file; 
+        //systems::Time abstime; // Xenomai timestamp
 
 //////////////////////////
     void getJointTf ( tf::StampedTransform * transform, string child, string parent ) {
@@ -90,7 +93,6 @@ class jointDataHandler {
         for (int i=0; i<_numTF; i++) {
             tf::StampedTransform transform;
             getJointTf( &transform, rgIds[i+1], rgIds[i]);
-            //getJointTf( &transform, rgIds[i+1], rgIds[0]);
             (* tf_vec)[i] = transform;
         }
     }
@@ -99,16 +101,15 @@ class jointDataHandler {
                           const vector <tf::StampedTransform> * tf_vec_1, 
                           vector <float> * jp_vec ) {
           
-        //Eigen::Matrix3d rot_0, rot_1, rot_rel;
-        tf::Matrix3x3 rot_0, rot_1, rot_rel;
+        Eigen::Matrix3d rot_0, rot_1, rot_rel;
+        //tf::Matrix3x3 rot_0, rot_1, rot_rel;
         for (int j=0; j<_DOF; j++) {
             int tf_id = _tfIds[j];
             int ea_id = _eaIds[j];
-            //tf::matrixTFToEigen( (*tf_vec_0)[tf_id].getBasis(), rot_0);
-            //tf::matrixTFToEigen( (*tf_vec_1)[tf_id].getBasis(), rot_1);
-            
-            rot_0 = (*tf_vec_0)[tf_id].getBasis();
-            rot_1 = (*tf_vec_1)[tf_id].getBasis();
+            tf::matrixTFToEigen( (*tf_vec_0)[tf_id].getBasis(), rot_0);
+            tf::matrixTFToEigen( (*tf_vec_1)[tf_id].getBasis(), rot_1);
+            //rot_0 = (*tf_vec_0)[tf_id].getBasis();
+            //rot_1 = (*tf_vec_1)[tf_id].getBasis();
 
             try {
                 rot_rel = rot_0.inverse() * rot_1;
@@ -118,39 +119,19 @@ class jointDataHandler {
             }
 
             //Eigen::Vector3d ea = rot_rel.eulerAngles(0,1,2);
+            Eigen::AngleAxisd aa(rot_rel); 
+            (*jp_vec)[j] = aa.angle();
+            
+            //double yaw, pitch, roll;
+            //rot_rel.getRPY(roll,pitch,yaw);
+            //vector <float> ea (3);
+            //ea[0]=roll; ea[1]=pitch; ea[2]=yaw;
             //(*jp_vec)[j] = ea[ea_id];
-
-            double yaw, pitch, roll;
-            rot_rel.getRPY(roll,pitch,yaw);
-            vector <float> ea (3);
-            ea[0]=roll; ea[1]=pitch; ea[2]=yaw;
-            (*jp_vec)[j] = ea[ea_id];
         }
 
     }
 
-       // Eigen::Matrix3d rot_0, rot_1, rot_rel;
-       // tf::matrixTFToEigen(tf_0.getBasis(), rot_0);
-    //tf::matrixTFToEigen(tf_1.getBasis(), rot_1);
-       
-    //    try {
-    //        rot_rel = rot_0.inverse() * rot_1;
-    //    }
-    //    catch ( std::exception &ex){
-    //        ROS_ERROR("%s",ex.what());
-    //    }
-
-        //Eigen::Quaterniond quat(rot_rel); // Convert Matrix to Quat
-        //quat.normalize();
-        //return 2 * acos(quat.coeffs().data()[0]); 
-
-        /* Note: Euler sufficient for static base frame, unique rigid bodies. */
-    //    Eigen::Vector3d ea = rot_rel.eulerAngles(0,1,2);
-    //    return ea[id] ; 
-   // }
-
 //////////////////////////
-
     void printTfs (tf::StampedTransform transform) {
         double yaw, pitch, roll;
         transform.getBasis().getRPY(roll, pitch, yaw);
@@ -163,14 +144,17 @@ class jointDataHandler {
     }
 
 //////////////////////////
-
     void writeJp2File ( const double time, const vector <float> * jp_vec ) {
         
+        //cout << time << endl;
         string jp_out;
-        char buffer [50];
-        sprintf(buffer, "%20.12f", time);
+        char buffer [100];
+        sprintf(buffer, "%30.18f", time);
+        //printf(buffer, "%d", (int) time);
+        //printf(buffer, "%d.%d",t_nsec);
         jp_out = buffer;
-
+        //cout << buffer << endl;
+        //cout << (int) time << endl;
         for (int j=0; j < _DOF; j++) {
         char buffer2 [50];
             sprintf(buffer2, "%8.6f", (*jp_vec)[j]);
@@ -182,23 +166,22 @@ class jointDataHandler {
 //////////////////////////
 
     void loop(){
-        //ros::Rate rate(1000); // 1kHz
 
         vector <float> jpVec_0 (_DOF, 0.0);
         vector <float> jpVec (_DOF);
 
-        ros::Rate rate(500); 
+        ros::Rate rate(500); // Hz 
         double t_0 = 0.0;
         while (node.ok()) {
         /* Update TF measurement */
             getJointTfs( &tfVec );
             getJointAngles( &tfVec_0, &tfVec, &jpVec );
-            double t = (double) tfVec[0].stamp_.toSec();
+            double t = tfVec[0].stamp_.toSec();
             if (t > t_0) {
                 writeJp2File ( t, &jpVec) ;
                 t_0 = t;
             }
-            
+           
             #ifdef DEBUG
             float delta = 0.0;
             for (int i=0; i<_DOF; i++) {
@@ -213,47 +196,8 @@ class jointDataHandler {
                      << (jpVec[3]) * 180.0/3.1415 << endl;
             }
             #endif
-            
             rate.sleep();
         } 
-
-
-//        getJointTf( tf_jt1, l1_name, base_name );
- //       getJointTf( tf_jt2, l2_name, l1_name );
- //  
- //       // Test Joint 1
- //       
- //       double angle1_0 = getJointAngle(tf_jt1, tf_jt1_0);
-//  
-//        while (node.ok()) {
-//            getJointTf( tf_jt1, l1_name, base_name );
-//            getJointTf( tf_jt2, l2_name, l1_name );
-//            double angle1 = getJointAngle(tf_jt1, tf_jt1_0);
-//            double delta1 = angle1 - angle1_0;
-//           
-//            if (delta1 > 0.01 || delta1 < -0.01){
-//                angle1_0 = angle1;
-//                angle1 = angle1 + delta1;
-//                cout << angle1 * 180.0 / 3.1415 << endl;
-//            }
-//        }
- //
- //       // Test Joint 2
- //       
- //       double angle_0 = getJointAngle(tf_jt2, tf_jt2_0);
- //
- //       while (node.ok()) {
- //           getJointTf( tf_jt1, l1_name, base_name );
- //           getJointTf( tf_jt2, l2_name, l1_name );
- //           double angle = getJointAngle(tf_jt2, tf_jt2_0);
- //           double delta = angle - angle_0;
- //          
- //           if (delta > 0.01 || delta < -0.01){
- //               angle_0 = angle;
- //               angle = angle + delta;
- //               std::cout << angle * 180.0 / 3.1415 << std::endl;
- //           }
- //       }
     }
 };
 
@@ -266,18 +210,9 @@ int main(int argc, char **argv)
 
     ros::NodeHandle nh;
 
-    //ros::Publisher pub_jt2 = nh.advertise<tf::StampedTransform>("/Jt_2/pose", 10);
-    //tf::TransformBroadcaster br;
-
     jointDataHandler  jt_dh(nh); 
     
     jt_dh.loop();
 
-      //std::cout << tf_jt1.getOrigin().z()  << std::endl;
-      //std::cout << ' ' << std::endl;
-
-      //transform.stamp_ = ros::Time::now();
-      //br.sendTransform(transform);
-
-     return 0;
+    return 0;
 };
