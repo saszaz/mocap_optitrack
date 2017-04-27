@@ -27,7 +27,7 @@ const vector<string> rgIds={"Base/base_link",
 // file_path
 const string path = "./joint_dat.txt";
 
-#define DEBUG
+//#define DEBUG
 
 class jointDataHandler { 
 
@@ -121,6 +121,9 @@ class jointDataHandler {
             //Eigen::Vector3d ea = rot_rel.eulerAngles(0,1,2);
             Eigen::AngleAxisd aa(rot_rel); 
             (*jp_vec)[j] = aa.angle();
+
+            /* Set angle sign */
+            if (aa.axis()[2] < 0.0) (*jp_vec)[j] *= -1.0; // Set parent frame orient. in Motive  
             
             //double yaw, pitch, roll;
             //rot_rel.getRPY(roll,pitch,yaw);
@@ -146,15 +149,10 @@ class jointDataHandler {
 //////////////////////////
     void writeJp2File ( const double time, const vector <float> * jp_vec ) {
         
-        //cout << time << endl;
         string jp_out;
         char buffer [100];
         sprintf(buffer, "%30.18f", time);
-        //printf(buffer, "%d", (int) time);
-        //printf(buffer, "%d.%d",t_nsec);
         jp_out = buffer;
-        //cout << buffer << endl;
-        //cout << (int) time << endl;
         for (int j=0; j < _DOF; j++) {
         char buffer2 [50];
             sprintf(buffer2, "%8.6f", (*jp_vec)[j]);
@@ -163,6 +161,24 @@ class jointDataHandler {
         jp_file << jp_out << endl;
     }
 
+//////////////////////////
+    void writeTf2File () {
+        
+        tf::StampedTransform transform;
+        getJointTf( &transform, rgIds[1], "world");
+        double time = transform.stamp_.toSec();
+
+        string jp_out;
+        char buffer [100];
+        sprintf(buffer, "%30.18f", time);
+        jp_out = buffer;
+        for (int j=0; j < 1; j++) {
+        char buffer2 [50];
+            sprintf(buffer2, "%8.6f", transform.getRotation().getAngle());
+            jp_out = jp_out + ", " + buffer2;
+        }
+        jp_file << jp_out << endl;
+    }
 //////////////////////////
 
     void loop(){
