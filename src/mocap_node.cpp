@@ -18,11 +18,17 @@
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/Pose2D.h>
 
+#include <string>
+#include <iostream>
+#include <fstream>
+
 // System includes
 #include <string>
 #include <unistd.h>
 ////////////////////////////////////////////////////////////////////////
 // Constants
+
+using namespace std;
 
 // ip on multicast group - cannot be changed in Arena
 const std::string MULTICAST_IP_KEY = "optitrack_config/multicast_address";
@@ -98,6 +104,9 @@ void processMocapData( const char** mocap_model,
   ROS_INFO("Start processMocapData");
   bool version = false;
 
+  ofstream jp_file;
+  jp_file.open("packet_data.txt",ios::out);
+
   while(ros::ok())
   {
     bool packetread = false;
@@ -107,7 +116,8 @@ void processMocapData( const char** mocap_model,
     if(!version) {
       int iRet = multicast_client_socket.send((char*)&PacketOut, 4 + PacketOut.nDataBytes, COMMAND_PORT);
     }
-
+    
+    
     do
     {
       // Receive data from mocap device
@@ -116,51 +126,64 @@ void processMocapData( const char** mocap_model,
       // Parse mocap data
       if( numBytes > 0 )
       {
+
         const char* buffer = multicast_client_socket.getBuffer();
         memcpy((char*)&PacketIn, buffer, numBytes);
         unsigned short header = *((unsigned short*)(&buffer[0])); // 2-bytes, ushort.
 
-
         // Look for the beginning of a NatNet package
         if (header == NAT_FRAMEOFDATA && version)
         {
-          payload_len = *((unsigned short*) &buffer[2]);  // 2-bytes.
-          MoCapDataFormat format(buffer, payload_len);
-          format.setVersion(nver,sver);
-          format.parse();
-          packetread = true;
-          numberOfPackets++;
 
-          if( format.model.numRigidBodies > 0 )
-          {
-            for( int i = 0; i < format.model.numRigidBodies; i++ )
-            {
-              int ID = format.model.rigidBodies[i].ID;
-              RigidBodyMap::iterator item = published_rigid_bodies.find(ID);
+           string jp_out;
+           char buffer1 [100];
+           sprintf(buffer1, "%30.18f", ros::Time::now().toSec());
+           jp_out = buffer1;
+           char buffer2 [50];
+           sprintf(buffer2, "%d", numBytes);
+           jp_out = jp_out + ", " + buffer2;
+         
+           jp_file << jp_out << endl;
+        
+           packetread = true;
 
-              if (item != published_rigid_bodies.end())
-              {
-                  item->second.publish(format.model.rigidBodies[i]);
-              }
-            }
-          }
-        }
-
+//          payload_len = *((unsigned short*) &buffer[2]);  // 2-bytes.
+ //         MoCapDataFormat format(buffer, payload_len);
+ //         format.setVersion(nver,sver);
+ //         format.parse();
+ //         packetread = true;
+ //         numberOfPackets++;
+ //
+ //         if( format.model.numRigidBodies > 0 )
+ //         {
+ //           for( int i = 0; i < format.model.numRigidBodies; i++ )
+ //           {
+ //             int ID = format.model.rigidBodies[i].ID;
+ //             RigidBodyMap::iterator item = published_rigid_bodies.find(ID);
+ //
+ //             if (item != published_rigid_bodies.end())
+ //             {
+ //                 item->second.publish(format.model.rigidBodies[i]);
+ //             }
+ //           }
+ //         }
+       }
+        
         if (header == NAT_PINGRESPONSE) {
           ROS_DEBUG("Header : %d, %d", header, PacketIn.iMessage);
           ROS_DEBUG("nData : %d", PacketIn.nDataBytes);
-
+ 
           for(int i=0;i<4;++i) {
             nver[i] = (int)PacketIn.Data.Sender.NatNetVersion[i];
             sver[i] = (int)PacketIn.Data.Sender.Version[i];
           }
-
+ 
           ROS_INFO_ONCE("NATNet Version : %d.%d.%d.%d", nver[0], nver[1], nver[2], nver[3]);
           ROS_INFO_ONCE("Server Version : %d.%d.%d.%d", sver[0], sver[1], sver[2], sver[3]);
           version = true;
         }
-        // else skip packet
-      }
+       // else skip packet
+     }
     } while( numBytes > 0 );
 
     // Don't try again immediately
@@ -169,6 +192,7 @@ void processMocapData( const char** mocap_model,
       usleep( 10 );
     }
   }
+  jp_file.close();
 }
 
 
