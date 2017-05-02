@@ -105,7 +105,7 @@ void processMocapData( const char** mocap_model,
   bool version = false;
 
   ofstream jp_file;
-  jp_file.open("packet_data.txt",ios::out);
+  jp_file.open("/home/ehuang/icra2017_data/mocap_testing/testing/packet_data.txt",ios::out);
 
   while(ros::ok())
   {
@@ -145,28 +145,28 @@ void processMocapData( const char** mocap_model,
          
            jp_file << jp_out << endl;
         
-           packetread = true;
+//           packetread = true;
 
-//          payload_len = *((unsigned short*) &buffer[2]);  // 2-bytes.
- //         MoCapDataFormat format(buffer, payload_len);
- //         format.setVersion(nver,sver);
- //         format.parse();
- //         packetread = true;
- //         numberOfPackets++;
- //
- //         if( format.model.numRigidBodies > 0 )
- //         {
- //           for( int i = 0; i < format.model.numRigidBodies; i++ )
- //           {
- //             int ID = format.model.rigidBodies[i].ID;
- //             RigidBodyMap::iterator item = published_rigid_bodies.find(ID);
- //
- //             if (item != published_rigid_bodies.end())
- //             {
- //                 item->second.publish(format.model.rigidBodies[i]);
- //             }
- //           }
- //         }
+         payload_len = *((unsigned short*) &buffer[2]);  // 2-bytes.
+         MoCapDataFormat format(buffer, payload_len);
+         format.setVersion(nver,sver);
+         format.parse();
+         packetread = true;
+         numberOfPackets++;
+
+         if( format.model.numRigidBodies > 0 )
+         {
+           for( int i = 0; i < format.model.numRigidBodies; i++ )
+           {
+             int ID = format.model.rigidBodies[i].ID;
+             RigidBodyMap::iterator item = published_rigid_bodies.find(ID);
+
+             if (item != published_rigid_bodies.end())
+             {
+                 item->second.publish(format.model.rigidBodies[i]);
+             }
+           }
+         }
        }
         
         if (header == NAT_PINGRESPONSE) {
